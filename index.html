@@ -1,0 +1,1987 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1.0, user-scalable=no"
+		/>
+		<title>3D 桌面布局规划器</title>
+		<!-- Tailwind CSS for styling -->
+		<script src="https://cdn.tailwindcss.com"></script>
+		<!-- Google Fonts for a clean UI -->
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			/* Custom styles for the application */
+			body {
+				font-family: "Inter", sans-serif;
+				overscroll-behavior: none; /* Prevents pull-to-refresh on mobile */
+			}
+			#scene-container canvas {
+				display: block;
+				width: 100%;
+				height: 100%;
+			}
+			/* Custom scrollbar for better aesthetics */
+			.custom-scrollbar::-webkit-scrollbar {
+				width: 6px;
+			}
+			.custom-scrollbar::-webkit-scrollbar-track {
+				background: #f1f1f1;
+				border-radius: 10px;
+			}
+			.custom-scrollbar::-webkit-scrollbar-thumb {
+				background: #888;
+				border-radius: 10px;
+			}
+			.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+				background: #555;
+			}
+			/* Hide number input spinners */
+			input[type="number"]::-webkit-inner-spin-button,
+			input[type="number"]::-webkit-outer-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+			input[type="number"] {
+				-moz-appearance: textfield;
+			}
+			/* Style for disabled buttons in modal */
+			.category-button[disabled] {
+				opacity: 0.5;
+				cursor: not-allowed;
+				background-color: #e5e7eb;
+			}
+			.welcome-screen {
+				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			}
+		</style>
+	</head>
+	<body class="bg-gray-100 text-gray-800 antialiased overflow-hidden">
+		<div id="app" class="h-screen w-screen">
+			<!-- Initial Load Modal -->
+			<div
+				v-if="!layoutLoaded"
+				class="absolute inset-0 welcome-screen flex items-center justify-center z-50 p-4"
+			>
+				<div class="absolute top-4 right-4">
+					<button
+						@click="toggleLang"
+						class="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full text-sm font-bold text-white hover:bg-white/30 transition-colors shadow-md"
+					>
+						{{ lang === 'zh' ? 'EN' : '中' }}
+					</button>
+				</div>
+				<div
+					class="bg-white/90 backdrop-blur-lg rounded-2xl shadow-xl p-8 max-w-md w-full text-center"
+				>
+					<svg
+						class="mx-auto h-16 w-16 text-indigo-500"
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="1"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2zM12 3v15"
+						/>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M3 5.333A2.333 2.333 0 015.333 3h13.334A2.333 2.333 0 0121 5.333v13.334A2.333 2.333 0 0118.667 21H5.333A2.333 2.333 0 013 18.667V5.333z"
+						/>
+					</svg>
+					<h2 class="text-3xl font-bold mb-2 mt-4 text-gray-800">
+						{{ t.welcomeTitle }}
+					</h2>
+					<p class="text-gray-600 mb-8">{{ t.welcomeDesc }}</p>
+					<div class="space-y-4">
+						<button
+							@click="createNewLayout"
+							class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+						>
+							{{ t.welcomeCreate }}
+						</button>
+						<button
+							@click="$refs.fileInput.click()"
+							class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg transition duration-300"
+						>
+							{{ t.welcomeOpen }}
+						</button>
+						<input
+							type="file"
+							ref="fileInput"
+							@change="loadLayoutFromFile"
+							accept=".json"
+							class="hidden"
+						/>
+					</div>
+				</div>
+			</div>
+
+			<!-- Main Application Layout -->
+			<div
+				v-if="layoutLoaded"
+				class="h-full w-full flex"
+				:class="{'flex-col': isMobile && !isPreviewing, 'flex-row': !isMobile && !isPreviewing}"
+			>
+				<!-- 3D Scene (Right on Desktop, Full on Mobile) -->
+				<div
+					class="relative"
+					:class="isPreviewing ? 'w-screen h-screen' : 'flex-grow order-1 md:order-2'"
+				>
+					<div id="scene-container" class="w-full h-full bg-gray-200"></div>
+					<!-- UI Overlays for Scene -->
+					<div
+						v-if="!isPreviewing"
+						class="absolute top-4 right-4 flex space-x-2"
+					>
+						<button
+							@click="isHelpModalOpen = true"
+							class="hidden md:block w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full text-lg font-bold text-gray-700 hover:bg-white transition-colors shadow-md"
+						>
+							?
+						</button>
+						<button
+							@click="toggleLang"
+							class="hidden md:block w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full text-sm font-bold text-gray-700 hover:bg-white transition-colors shadow-md"
+						>
+							{{ lang === 'zh' ? 'EN' : '中' }}
+						</button>
+					</div>
+					<button
+						v-if="isPreviewing"
+						@click="togglePreview(false)"
+						class="fixed top-4 left-4 z-50 bg-white/80 backdrop-blur-sm rounded-full py-2 px-4 text-sm font-bold text-gray-700 hover:bg-white transition-colors shadow-md"
+					>
+						{{ t.exitPreview }}
+					</button>
+				</div>
+
+				<!-- Control Panel / Mobile Drawer -->
+				<div
+					v-if="!isPreviewing"
+					:class="[
+						'bg-white flex flex-col',
+						isMobile
+							? 'fixed bottom-0 left-0 right-0 w-full h-[60vh] transition-transform duration-300 ease-in-out z-40 rounded-t-2xl shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.3)] border-t'
+							: 'md:w-96 order-1 border-r shadow-lg',
+					]"
+					:style="
+						isMobile
+							? {
+									transform: isPanelOpen
+										? 'translateY(0)'
+										: 'translateY(calc(100% - 56px))',
+							  }
+							: {}
+					"
+				>
+					<!-- Mobile Drawer Handle -->
+					<div
+						v-if="isMobile"
+						@click="isPanelOpen = !isPanelOpen"
+						class="flex-shrink-0 h-14 bg-white rounded-t-2xl flex items-center justify-center cursor-pointer relative"
+					>
+						<div class="w-10 h-1.5 bg-gray-300 rounded-full"></div>
+						<div class="absolute right-4 text-gray-500">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-6 w-6 transition-transform"
+								:class="{ 'rotate-180': isPanelOpen }"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M5 15l7-7 7 7"
+								/>
+							</svg>
+						</div>
+					</div>
+
+					<!-- Header -->
+					<div
+						class="p-4 border-b border-gray-200"
+						:class="{ 'pt-0': isMobile }"
+					>
+						<input
+							type="text"
+							v-model="sceneName"
+							@change="saveState"
+							class="text-xl font-bold w-full bg-gray-100 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+							:placeholder="t.sceneNamePlaceholder"
+						/>
+					</div>
+
+					<!-- Actions -->
+					<div class="p-4 flex items-center space-x-2 border-b border-gray-200">
+						<button
+							@click="isAddModelModalOpen = true"
+							class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
+						>
+							{{ t.addModel }}
+						</button>
+						<button
+							@click="togglePreview(true)"
+							class="flex-1 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
+						>
+							{{ t.preview }}
+						</button>
+						<button
+							@click="saveLayoutToFile"
+							class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
+						>
+							{{ t.saveLayout }}
+						</button>
+						<button
+							@click="confirmExit"
+							class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
+						>
+							{{ t.exit }}
+						</button>
+
+						<button
+							@click="undo"
+							:disabled="!canUndo"
+							class="disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center bg-gray-200 hover:bg-gray-300 rounded-md p-2"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-5 w-5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"
+								/>
+							</svg>
+						</button>
+						<button
+							@click="redo"
+							:disabled="!canRedo"
+							class="disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center bg-gray-200 hover:bg-gray-300 rounded-md p-2"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-5 w-5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"
+								/>
+							</svg>
+						</button>
+
+						<button
+							v-if="isMobile"
+							@click="isHelpModalOpen = true"
+							class="p-2 bg-gray-200 rounded-md hover:bg-gray-300"
+						>
+							?
+						</button>
+						<button
+							v-if="isMobile"
+							@click="toggleLang"
+							class="p-2 bg-gray-200 rounded-md hover:bg-gray-300 text-xs font-bold"
+						>
+							{{ lang === 'zh' ? 'EN' : '中' }}
+						</button>
+					</div>
+
+					<!-- Object List -->
+					<div class="flex-grow overflow-y-auto custom-scrollbar p-2">
+						<div
+							v-if="objects.length === 0"
+							class="text-center text-gray-500 py-10"
+						>
+							<p>{{ t.emptyScene }}</p>
+						</div>
+						<div
+							v-for="obj in objects"
+							:key="obj.id"
+							:id="'item-' + obj.id"
+							class="mb-2 bg-gray-50 rounded-lg border border-gray-200 transition-all duration-300"
+							:class="{ 'ring-2 ring-blue-500': selectedObjectId === obj.id }"
+						>
+							<!-- Object Item Header -->
+							<div
+								class="flex items-center p-3 cursor-pointer"
+								@click="toggleObjectSelection(obj.id)"
+							>
+								<span class="font-semibold flex-grow"
+									>{{ getModelDisplayName(obj.type) }}</span
+								>
+								<button
+									@click.stop="toggleObjectExpansion(obj.id)"
+									class="text-gray-500 hover:text-blue-500 p-1 rounded-full"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-5 w-5 transition-transform"
+										:class="{ 'rotate-180': expandedObjectId === obj.id }"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 9l-7 7-7-7"
+										/>
+									</svg>
+								</button>
+								<button
+									@click.stop="deleteObject(obj.id)"
+									class="text-gray-500 hover:text-red-500 p-1 rounded-full ml-2"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-5 w-5"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+										/>
+									</svg>
+								</button>
+							</div>
+
+							<!-- Object Details (Expanded View) -->
+							<div
+								v-if="expandedObjectId === obj.id"
+								class="p-3 border-t border-gray-200 bg-white"
+							>
+								<div class="mb-4">
+									<p class="text-xs text-gray-500 mb-2">{{ t.transformTip }}</p>
+									<div class="flex items-center bg-gray-100 rounded-lg p-1">
+										<button
+											@click="transformMode = 'translate'"
+											:class="transformMode === 'translate' ? 'bg-blue-500 text-white' : 'bg-transparent text-gray-600'"
+											class="flex-1 rounded-md py-1 text-sm font-semibold transition-colors duration-200"
+										>
+											{{ t.translate }}
+										</button>
+										<button
+											@click="transformMode = 'rotate'"
+											:class="transformMode === 'rotate' ? 'bg-blue-500 text-white' : 'bg-transparent text-gray-600'"
+											class="flex-1 rounded-md py-1 text-sm font-semibold transition-colors duration-200"
+										>
+											{{ t.rotate }}
+										</button>
+									</div>
+									<button
+										v-if="!obj.type.startsWith('desk-') && !obj.mountedToId"
+										@click="dropObject(obj.id)"
+										class="w-full mt-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-2 rounded-md transition duration-300 text-sm flex items-center justify-center space-x-2"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-5 w-5"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M19 14l-7 7m0 0l-7-7m7 7V3"
+											/>
+										</svg>
+										<span>{{ t.dropToSurface }}</span>
+									</button>
+								</div>
+
+								<div class="grid grid-cols-3 gap-2 text-sm mb-4">
+									<div v-for="axis in ['x', 'y', 'z']" class="flex flex-col">
+										<label class="font-medium text-gray-500 uppercase"
+											>{{ axis }} ({{ t.position }})</label
+										>
+										<input
+											type="number"
+											step="10"
+											:value="Math.round(obj.position[axis] * 1000)"
+											@input="updateObjectValue(obj.id, 'position', axis, $event.target.value / 1000)"
+											@change="saveState"
+											class="w-full mt-1 bg-gray-100 rounded px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+										/>
+									</div>
+									<div v-for="axis in ['x', 'y', 'z']" class="flex flex-col">
+										<label class="font-medium text-gray-500 uppercase"
+											>{{ axis }} ({{ t.rotation }})</label
+										>
+										<input
+											type="number"
+											step="1"
+											:value="Math.round(obj.rotation[axis])"
+											@input="updateObjectValue(obj.id, 'rotation', axis, $event.target.value)"
+											@change="saveState"
+											class="w-full mt-1 bg-gray-100 rounded px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+										/>
+									</div>
+								</div>
+								<p
+									v-if="obj.mountedToId"
+									class="text-xs text-center text-orange-600 -mt-3 mb-3"
+								>
+									{{ t.mountedTip }}
+								</p>
+
+								<div class="space-y-3 text-sm">
+									<template v-if="obj.type.includes('desk')">
+										<h4 class="font-semibold text-gray-700">
+											{{ t.deskProps }}
+										</h4>
+										<template v-if="obj.type === 'desk-rect'">
+											<div class="flex items-center">
+												<label class="w-20">{{ t.length }}</label
+												><input
+													type="range"
+													min="500"
+													max="3000"
+													step="10"
+													:value="obj.params.width * 1000"
+													@input="updateObjectParam(obj.id, 'width', $event.target.value / 1000)"
+													@change="saveState"
+													class="w-full"
+												/><span class="ml-2 w-16 text-right"
+													>{{ Math.round(obj.params.width * 1000) }} {{ t.unit
+													}}</span
+												>
+											</div>
+											<div class="flex items-center">
+												<label class="w-20">{{ t.width }}</label
+												><input
+													type="range"
+													min="500"
+													max="2000"
+													step="10"
+													:value="obj.params.depth * 1000"
+													@input="updateObjectParam(obj.id, 'depth', $event.target.value / 1000)"
+													@change="saveState"
+													class="w-full"
+												/><span class="ml-2 w-16 text-right"
+													>{{ Math.round(obj.params.depth * 1000) }} {{ t.unit
+													}}</span
+												>
+											</div>
+										</template>
+										<template v-if="obj.type === 'desk-l'">
+											<div class="flex items-center">
+												<label class="w-20">{{ t.lengthA }}</label
+												><input
+													type="range"
+													min="500"
+													max="3000"
+													step="10"
+													:value="obj.params.widthA * 1000"
+													@input="updateObjectParam(obj.id, 'widthA', $event.target.value / 1000)"
+													@change="saveState"
+													class="w-full"
+												/><span class="ml-2 w-16 text-right"
+													>{{ Math.round(obj.params.widthA * 1000) }} {{ t.unit
+													}}</span
+												>
+											</div>
+											<div class="flex items-center">
+												<label class="w-20">{{ t.widthA }}</label
+												><input
+													type="range"
+													min="500"
+													max="2000"
+													step="10"
+													:value="obj.params.depthA * 1000"
+													@input="updateObjectParam(obj.id, 'depthA', $event.target.value / 1000)"
+													@change="saveState"
+													class="w-full"
+												/><span class="ml-2 w-16 text-right"
+													>{{ Math.round(obj.params.depthA * 1000) }} {{ t.unit
+													}}</span
+												>
+											</div>
+											<div class="flex items-center">
+												<label class="w-20">{{ t.lengthB }}</label
+												><input
+													type="range"
+													min="500"
+													max="3000"
+													step="10"
+													:value="obj.params.widthB * 1000"
+													@input="updateObjectParam(obj.id, 'widthB', $event.target.value / 1000)"
+													@change="saveState"
+													class="w-full"
+												/><span class="ml-2 w-16 text-right"
+													>{{ Math.round(obj.params.widthB * 1000) }} {{ t.unit
+													}}</span
+												>
+											</div>
+											<div class="flex items-center">
+												<label class="w-20">{{ t.widthB }}</label
+												><input
+													type="range"
+													min="500"
+													max="2000"
+													step="10"
+													:value="obj.params.depthB * 1000"
+													@input="updateObjectParam(obj.id, 'depthB', $event.target.value / 1000)"
+													@change="saveState"
+													class="w-full"
+												/><span class="ml-2 w-16 text-right"
+													>{{ Math.round(obj.params.depthB * 1000) }} {{ t.unit
+													}}</span
+												>
+											</div>
+										</template>
+										<div class="flex items-center justify-between">
+											<label>{{ t.showLegs }}</label
+											><input
+												type="checkbox"
+												:checked="obj.params.showLegs"
+												@change="updateObjectParam(obj.id, 'showLegs', $event.target.checked); saveState()"
+												class="h-5 w-5 text-blue-600 rounded"
+											/>
+										</div>
+										<div class="flex items-center">
+											<label class="w-20">{{ t.height }}</label
+											><input
+												type="range"
+												min="500"
+												max="1200"
+												step="10"
+												:value="obj.params.height * 1000"
+												@input="updateObjectParam(obj.id, 'height', $event.target.value / 1000)"
+												@change="saveState"
+												class="w-full"
+											/><span class="ml-2 w-16 text-right"
+												>{{ Math.round(obj.params.height * 1000) }} {{ t.unit
+												}}</span
+											>
+										</div>
+										<div class="flex items-center">
+											<label class="w-20">{{ t.color }}</label
+											><input
+												type="color"
+												:value="obj.params.color"
+												@input="updateObjectParam(obj.id, 'color', $event.target.value)"
+												@change="saveState"
+												class="h-8 w-full p-0 border-none rounded"
+											/>
+										</div>
+									</template>
+									<template v-if="obj.type === 'custom-box'">
+										<h4 class="font-semibold text-gray-700">
+											{{ t.dimensions }}
+										</h4>
+										<div class="flex items-center">
+											<label class="w-20">{{ t.width }}</label
+											><input
+												type="range"
+												min="10"
+												max="2000"
+												step="10"
+												:value="obj.params.width * 1000"
+												@input="updateObjectParam(obj.id, 'width', $event.target.value / 1000)"
+												@change="saveState"
+												class="w-full"
+											/><span class="ml-2 w-16 text-right"
+												>{{ Math.round(obj.params.width * 1000) }} {{ t.unit
+												}}</span
+											>
+										</div>
+										<div class="flex items-center">
+											<label class="w-20">{{ t.height }}</label
+											><input
+												type="range"
+												min="10"
+												max="2000"
+												step="10"
+												:value="obj.params.height * 1000"
+												@input="updateObjectParam(obj.id, 'height', $event.target.value / 1000)"
+												@change="saveState"
+												class="w-full"
+											/><span class="ml-2 w-16 text-right"
+												>{{ Math.round(obj.params.height * 1000) }} {{ t.unit
+												}}</span
+											>
+										</div>
+										<div class="flex items-center">
+											<label class="w-20">{{ t.depth }}</label
+											><input
+												type="range"
+												min="10"
+												max="2000"
+												step="10"
+												:value="obj.params.depth * 1000"
+												@input="updateObjectParam(obj.id, 'depth', $event.target.value / 1000)"
+												@change="saveState"
+												class="w-full"
+											/><span class="ml-2 w-16 text-right"
+												>{{ Math.round(obj.params.depth * 1000) }} {{ t.unit
+												}}</span
+											>
+										</div>
+										<div class="flex items-center">
+											<label class="w-20">{{ t.color }}</label
+											><input
+												type="color"
+												:value="obj.params.color"
+												@input="updateObjectParam(obj.id, 'color', $event.target.value)"
+												@change="saveState"
+												class="h-8 w-full p-0 border-none rounded"
+											/>
+										</div>
+									</template>
+									<template v-if="obj.type === 'universal-stand'">
+										<h4 class="font-semibold text-gray-700">
+											{{ t.standProps }}
+										</h4>
+										<div class="flex items-center">
+											<label class="w-24">{{ t.baseSize }}</label
+											><input
+												type="range"
+												min="100"
+												max="500"
+												step="10"
+												:value="obj.params.baseSize * 1000"
+												@input="updateObjectParam(obj.id, 'baseSize', $event.target.value / 1000)"
+												@change="saveState"
+												class="w-full"
+											/><span class="ml-2 w-16 text-right"
+												>{{ Math.round(obj.params.baseSize * 1000) }} {{ t.unit
+												}}</span
+											>
+										</div>
+										<div class="flex items-center">
+											<label class="w-24">{{ t.poleHeight }}</label
+											><input
+												type="range"
+												min="100"
+												max="1000"
+												step="10"
+												:value="obj.params.poleHeight * 1000"
+												@input="updateObjectParam(obj.id, 'poleHeight', $event.target.value / 1000)"
+												@change="saveState"
+												class="w-full"
+											/><span class="ml-2 w-16 text-right"
+												>{{ Math.round(obj.params.poleHeight * 1000) }} {{
+												t.unit }}</span
+											>
+										</div>
+										<div class="flex items-center">
+											<label class="w-24">{{ t.armLength }}</label
+											><input
+												type="range"
+												min="0"
+												max="800"
+												step="10"
+												:value="obj.params.armLength * 1000"
+												@input="updateObjectParam(obj.id, 'armLength', $event.target.value / 1000)"
+												@change="saveState"
+												class="w-full"
+											/><span class="ml-2 w-16 text-right"
+												>{{ Math.round(obj.params.armLength * 1000) }} {{ t.unit
+												}}</span
+											>
+										</div>
+										<div class="flex items-center">
+											<label class="w-24">{{ t.color }}</label
+											><input
+												type="color"
+												:value="obj.params.color"
+												@input="updateObjectParam(obj.id, 'color', $event.target.value)"
+												@change="saveState"
+												class="h-8 w-full p-0 border-none rounded"
+											/>
+										</div>
+										<h4 class="font-semibold text-gray-700 mt-4">
+											{{ t.mountPoint }}
+										</h4>
+										<div v-if="obj.params.mountedObjectId">
+											<div
+												class="flex items-center justify-between p-2 bg-gray-100 rounded"
+											>
+												<span
+													>{{ t.mounted }}: {{
+													getModelDisplayName(getMountedItem(obj.params.mountedObjectId).type)
+													}}</span
+												><button
+													@click="unmountObject(obj.id)"
+													class="bg-red-500 text-white text-xs px-2 py-1 rounded hover:bg-red-600"
+												>
+													{{ t.unmount }}
+												</button>
+											</div>
+										</div>
+										<div v-else>
+											<div class="relative">
+												<button
+													@click="toggleMountDropdown(obj.id)"
+													class="w-full bg-blue-100 text-blue-800 p-2 rounded hover:bg-blue-200"
+												>
+													{{ t.mountObject }}...
+												</button>
+												<div
+													v-if="showMountDropdownFor === obj.id"
+													@click.stop
+													class="absolute z-10 w-full bg-white border rounded mt-1 max-h-40 overflow-y-auto"
+												>
+													<template v-if="mountableItems.length > 0"
+														><a
+															v-for="item in mountableItems"
+															:key="item.id"
+															@click="mountObject(obj.id, item.id)"
+															class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
+															>{{ getModelDisplayName(item.type) }} #{{
+															item.id.substring(0,4) }}</a
+														></template
+													>
+													<div v-else class="p-2 text-gray-500 text-center">
+														{{ t.noMountableItems }}
+													</div>
+												</div>
+											</div>
+										</div>
+									</template>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Add Model Modal -->
+			<div
+				v-if="isAddModelModalOpen"
+				class="absolute inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-40"
+				@click="isAddModelModalOpen = false"
+			>
+				<div
+					class="bg-white rounded-lg shadow-xl p-6 max-w-3xl w-full"
+					@click.stop
+				>
+					<div class="flex justify-between items-center mb-6">
+						<h3 class="text-xl font-bold">
+							<button
+								v-if="addModalCategory"
+								@click="addModalCategory = null"
+								class="mr-2 text-blue-500 hover:text-blue-700"
+							>
+								&larr; {{ t.back }}
+							</button>
+							{{ addModalCategory ? `${t.add} ${t.categories[addModalCategory]}`
+							: t.selectCategory }}
+						</h3>
+						<button
+							@click="isAddModelModalOpen = false"
+							class="text-gray-500 hover:text-gray-800 text-3xl leading-none"
+						>
+							&times;
+						</button>
+					</div>
+					<div
+						v-if="!addModalCategory"
+						class="grid grid-cols-2 md:grid-cols-4 gap-4"
+					>
+						<button
+							v-for="(models, category) in availableModels"
+							:key="category"
+							@click="addModalCategory = category"
+							:disabled="category === 'desks' && isDeskInScene"
+							class="category-button p-4 bg-gray-100 rounded-lg text-center cursor-pointer hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 transition-all focus:outline-none"
+						>
+							<div class="font-semibold text-lg">
+								{{ t.categories[category] }}
+							</div>
+						</button>
+					</div>
+					<div
+						v-else
+						class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"
+					>
+						<div
+							v-for="model in availableModels[addModalCategory]"
+							:key="model.type"
+							@click="addObject(model.type); isAddModelModalOpen = false"
+							class="p-4 bg-gray-100 rounded-lg text-center cursor-pointer hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 transition-all"
+						>
+							<div class="text-3xl mb-2">{{ model.icon }}</div>
+							<div class="font-semibold">
+								{{ getModelDisplayName(model.type) }}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Help Modal -->
+			<div
+				v-if="isHelpModalOpen"
+				class="absolute inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50"
+				@click="isHelpModalOpen = false"
+			>
+				<div
+					class="bg-white rounded-lg shadow-xl p-8 max-w-lg w-full"
+					@click.stop
+				>
+					<div class="flex justify-between items-center mb-4">
+						<h2 class="text-2xl font-bold">{{ t.helpTitle }}</h2>
+						<button
+							@click="isHelpModalOpen = false"
+							class="text-gray-500 hover:text-gray-800 text-3xl leading-none"
+						>
+							&times;
+						</button>
+					</div>
+					<div class="space-y-4 text-gray-700">
+						<div>
+							<h3 class="font-semibold text-lg mb-1">{{ t.helpCamera }}</h3>
+							<ul class="list-disc list-inside space-y-1">
+								<li><b>{{ t.helpRotate }}</b>: {{ t.helpRotateDesc }}</li>
+								<li><b>{{ t.helpPan }}</b>: {{ t.helpPanDesc }}</li>
+								<li><b>{{ t.helpZoom }}</b>: {{ t.helpZoomDesc }}</li>
+							</ul>
+						</div>
+						<div>
+							<h3 class="font-semibold text-lg mb-1">{{ t.helpSelect }}</h3>
+							<ul class="list-disc list-inside space-y-1">
+								<li><b>{{ t.helpSelectDesc1 }}</b></li>
+								<li><b>{{ t.helpSelectDesc2 }}</b></li>
+								<li><b>{{ t.helpSelectDesc3 }}</b></li>
+							</ul>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Dependencies: Vue and Three.js -->
+		<script
+			async
+			src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"
+		></script>
+		<script type="importmap">
+			{
+				"imports": {
+					"vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js",
+					"three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+					"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+				}
+			}
+		</script>
+
+		<!-- Main Application Logic -->
+		<script type="module">
+			import {
+				createApp,
+				ref,
+				reactive,
+				computed,
+				onMounted,
+				onUnmounted,
+				watch,
+				nextTick,
+			} from "vue";
+			import * as THREE from "three";
+			import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+			import { TransformControls } from "three/addons/controls/TransformControls.js";
+
+			// Helper function for deep cloning plain objects
+			const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
+
+			const App = {
+				setup() {
+					// --- STATE MANAGEMENT ---
+					const layoutLoaded = ref(false);
+					const sceneName = ref("");
+					const objects = reactive([]);
+					const selectedObjectId = ref(null);
+					const expandedObjectId = ref(null);
+					const isAddModelModalOpen = ref(false);
+					const isHelpModalOpen = ref(false);
+					const addModalCategory = ref(null);
+					const isMobile = ref(window.innerWidth < 768);
+					const isPreviewing = ref(false);
+					const isTransformDragging = ref(false);
+					const transformMode = ref("translate");
+					const showMountDropdownFor = ref(null);
+					const lang = ref("zh");
+					const isPanelOpen = ref(true); // State for mobile drawer
+
+					// --- UNDO/REDO ---
+					const history = ref([]);
+					const historyIndex = ref(-1);
+					const canUndo = computed(() => historyIndex.value > 0);
+					const canRedo = computed(
+						() => historyIndex.value < history.value.length - 1
+					);
+
+					// --- THREE.JS SCENE VARIABLES ---
+					let scene,
+						camera,
+						renderer,
+						orbitControls,
+						transformControls,
+						selectionBox;
+					let sceneObjects = new Map();
+					let mouseDownInfo = { x: 0, y: 0, time: 0 };
+
+					const availableModels = {
+						desks: [
+							{ type: "desk-rect", name: "矩形桌", icon: "▭" },
+							{ type: "desk-l", name: "L形转角桌", icon: "L" },
+						],
+						devices: [
+							{ type: "monitor", name: "显示器", icon: "🖥️" },
+							{ type: "macbook", name: "笔记本电脑", icon: "💻" },
+							{ type: "iphone", name: "手机", icon: "📱" },
+						],
+						accessories: [
+							{ type: "keyboard", name: "键盘", icon: "⌨️" },
+							{ type: "mouse", name: "鼠标", icon: "🖱️" },
+							{ type: "universal-stand", name: "通用支架", icon: "🔩" },
+						],
+						others: [{ type: "custom-box", name: "自定义立方体", icon: "📦" }],
+					};
+
+					const translations = {
+						zh: {
+							welcomeTitle: "欢迎使用桌面规划器",
+							welcomeDesc: "创建一个新的桌面布局，或从文件中加载您已有的方案。",
+							welcomeCreate: "创建新桌面",
+							welcomeOpen: "打开布局文件 (.json)",
+							sceneNamePlaceholder: "我的桌面布局",
+							addModel: "添加模型",
+							saveLayout: "保存",
+							preview: "预览",
+							exitPreview: "返回编辑",
+							exit: "退出",
+							exitConfirm: "您确定要退出吗？所有未保存的更改将丢失。",
+							emptyScene: '场景为空，请点击 "添加模型"',
+							transformTip: "提示：再次点击场景中的模型可切换移动/旋转模式。",
+							translate: "移动",
+							rotate: "旋转",
+							position: "位置",
+							rotation: "旋转",
+							dropToSurface: "垂直下落",
+							unit: "mm",
+							mountedTip: "此物品已挂载，位置和旋转由支架决定。",
+							deskProps: "桌面属性",
+							length: "长度",
+							width: "宽度",
+							lengthA: "长度 (A)",
+							widthA: "宽度 (A)",
+							lengthB: "长度 (B)",
+							widthB: "宽度 (B)",
+							showLegs: "显示桌腿",
+							height: "高度",
+							color: "颜色",
+							dimensions: "尺寸",
+							depth: "深度",
+							standProps: "支架属性",
+							baseSize: "底座尺寸",
+							poleHeight: "支撑杆高度",
+							armLength: "悬臂长度",
+							mountPoint: "挂载点",
+							mounted: "已挂载",
+							unmount: "卸载",
+							mountObject: "挂载物品",
+							noMountableItems: "场景中无可用挂载物品",
+							back: "返回",
+							add: "添加",
+							selectCategory: "选择分类",
+							categories: {
+								desks: "桌子",
+								devices: "设备",
+								accessories: "配件",
+								others: "其他",
+							},
+							helpTitle: "操作帮助",
+							helpCamera: "视角控制",
+							helpRotate: "旋转视角",
+							helpRotateDesc: "按住鼠标左键 / 单指触摸滑动",
+							helpPan: "平移视角",
+							helpPanDesc: "按住鼠标右键 / 双指触摸滑动",
+							helpZoom: "缩放视角",
+							helpZoomDesc: "滚动鼠标滚轮 / 双指缩放",
+							helpSelect: "物品操作",
+							helpSelectDesc1: "单击场景中的物品以选中。",
+							helpSelectDesc2: "再次单击选中的物品可在移动/旋转模式间切换。",
+							helpSelectDesc3: "单击场景空白处取消选中。",
+						},
+						en: {
+							welcomeTitle: "Welcome to Desk Planner",
+							welcomeDesc:
+								"Create a new desk layout, or load an existing one from a file.",
+							welcomeCreate: "Create New Desk",
+							welcomeOpen: "Open Layout File (.json)",
+							sceneNamePlaceholder: "My Desk Setup",
+							addModel: "Add Model",
+							saveLayout: "Save",
+							preview: "Preview",
+							exitPreview: "Back to Editor",
+							exit: "Exit",
+							exitConfirm:
+								"Are you sure you want to exit? All unsaved changes will be lost.",
+							emptyScene: 'Scene is empty. Click "Add Model" to start.',
+							transformTip:
+								"Tip: Click the selected model again in the scene to toggle Translate/Rotate mode.",
+							translate: "Translate",
+							rotate: "Rotate",
+							position: "Position",
+							rotation: "Rotation",
+							dropToSurface: "Drop to Surface",
+							unit: "mm",
+							mountedTip:
+								"This item is mounted. Its position and rotation are controlled by the stand.",
+							deskProps: "Desk Properties",
+							length: "Length",
+							width: "Width",
+							lengthA: "Length (A)",
+							widthA: "Width (A)",
+							lengthB: "Length (B)",
+							widthB: "Width (B)",
+							showLegs: "Show Legs",
+							height: "Height",
+							color: "Color",
+							dimensions: "Dimensions",
+							depth: "Depth",
+							standProps: "Stand Properties",
+							baseSize: "Base Size",
+							poleHeight: "Pole Height",
+							armLength: "Arm Length",
+							mountPoint: "Mount Point",
+							mounted: "Mounted",
+							unmount: "Unmount",
+							mountObject: "Mount Item",
+							noMountableItems: "No mountable items in scene",
+							back: "Back",
+							add: "Add",
+							selectCategory: "Select Category",
+							categories: {
+								desks: "Desks",
+								devices: "Devices",
+								accessories: "Accessories",
+								others: "Others",
+							},
+							helpTitle: "Help",
+							helpCamera: "Camera Controls",
+							helpRotate: "Rotate View",
+							helpRotateDesc: "Hold left mouse button / One-finger drag",
+							helpPan: "Pan View",
+							helpPanDesc: "Hold right mouse button / Two-finger drag",
+							helpZoom: "Zoom View",
+							helpZoomDesc: "Mouse scroll wheel / Two-finger pinch",
+							helpSelect: "Object Controls",
+							helpSelectDesc1: "Click an object in the scene to select it.",
+							helpSelectDesc2:
+								"Click the selected object again to toggle between Translate and Rotate modes.",
+							helpSelectDesc3: "Click on the ground to deselect.",
+						},
+					};
+					const t = computed(() => translations[lang.value]);
+
+					const isDeskInScene = computed(() =>
+						objects.some((obj) => obj.type.startsWith("desk-"))
+					);
+					const mountableItems = computed(() =>
+						objects.filter((o) => o.params.isMountable && !o.mountedToId)
+					);
+					const getModelDisplayName = (type) => {
+						for (const category of Object.values(availableModels)) {
+							const model = category.find((m) => m.type === type);
+							if (model)
+								return lang.value === "zh"
+									? model.name
+									: type.charAt(0).toUpperCase() +
+											type.slice(1).replace("-", " ");
+						}
+						return "Unknown";
+					};
+					const getMountedItem = (itemId) =>
+						objects.find((o) => o.id === itemId);
+					const toggleLang = () => {
+						lang.value = lang.value === "zh" ? "en" : "zh";
+					};
+
+					onMounted(() => {
+						const savedLayout = localStorage.getItem(
+							"ar-desk-planner-autosave"
+						);
+						if (savedLayout) {
+							loadLayoutData(JSON.parse(savedLayout));
+						}
+						window.addEventListener("resize", handleResize);
+						handleResize();
+					});
+					onUnmounted(() => window.removeEventListener("resize", handleResize));
+					watch(isAddModelModalOpen, (isOpen) => {
+						if (!isOpen) addModalCategory.value = null;
+					});
+
+					const handleResize = () => {
+						isMobile.value = window.innerWidth < 768;
+						const container = document.getElementById("scene-container");
+						if (camera && renderer && container) {
+							camera.aspect = container.clientWidth / container.clientHeight;
+							camera.updateProjectionMatrix();
+							renderer.setSize(container.clientWidth, container.clientHeight);
+						}
+					};
+
+					const createNewLayout = () => {
+						layoutLoaded.value = true;
+						sceneName.value = t.value.sceneNamePlaceholder;
+						objects.splice(0);
+						nextTick(() => {
+							initThree();
+							addObject("desk-rect");
+						});
+						saveState();
+					};
+
+					const loadLayoutFromFile = (event) => {
+						const file = event.target.files[0];
+						if (!file) return;
+						const reader = new FileReader();
+						reader.onload = (e) => {
+							try {
+								loadLayoutData(JSON.parse(e.target.result));
+							} catch (error) {
+								console.error("Error parsing JSON file:", error);
+							}
+						};
+						reader.readAsText(file);
+						event.target.value = "";
+					};
+
+					const loadLayoutData = (data) => {
+						sceneName.value = data.sceneName || t.value.sceneNamePlaceholder;
+						objects.splice(0, objects.length, ...data.objects);
+						layoutLoaded.value = true;
+						nextTick(() => {
+							initThree();
+							rebuildSceneFromData();
+							saveState(false); // Load initial state without adding to history
+						});
+					};
+
+					const saveLayoutToFile = () => {
+						const layoutData = {
+							sceneName: sceneName.value,
+							objects: JSON.parse(JSON.stringify(objects)),
+						};
+						const blob = new Blob([JSON.stringify(layoutData, null, 2)], {
+							type: "application/json",
+						});
+						const url = URL.createObjectURL(blob);
+						const a = document.createElement("a");
+						a.href = url;
+						a.download = `${sceneName.value.replace(/ /g, "_")}.json`;
+						document.body.appendChild(a);
+						a.click();
+						document.body.removeChild(a);
+						URL.revokeObjectURL(url);
+					};
+
+					const autoSave = () => {
+						if (!layoutLoaded.value) return;
+						const layoutData = {
+							sceneName: sceneName.value,
+							objects: JSON.parse(JSON.stringify(objects)),
+						};
+						localStorage.setItem(
+							"ar-desk-planner-autosave",
+							JSON.stringify(layoutData)
+						);
+					};
+
+					const exitToWelcome = () => {
+						localStorage.removeItem("ar-desk-planner-autosave");
+						if (transformControls) {
+							transformControls.detach();
+						}
+						layoutLoaded.value = false;
+						sceneName.value = "";
+						objects.splice(0);
+						selectedObjectId.value = null;
+						expandedObjectId.value = null;
+						history.value = [];
+						historyIndex.value = -1;
+						isAddModelModalOpen.value = false;
+						isHelpModalOpen.value = false;
+						addModalCategory.value = null;
+						isPreviewing.value = false;
+
+						if (renderer) {
+							renderer.dispose();
+							renderer.domElement.remove();
+							scene = null;
+							camera = null;
+							renderer = null;
+							orbitControls = null;
+							transformControls = null;
+							selectionBox = null;
+							sceneObjects.clear();
+						}
+					};
+
+					const confirmExit = () => {
+						if (window.confirm(t.value.exitConfirm)) {
+							exitToWelcome();
+						}
+					};
+
+					watch(lang, (newLang) => {
+						availableModels.desks[0].name =
+							newLang === "zh" ? "矩形桌" : "Rectangle Desk";
+						availableModels.desks[1].name =
+							newLang === "zh" ? "L形转角桌" : "L-Shape Desk";
+						availableModels.devices[0].name =
+							newLang === "zh" ? "显示器" : "Monitor";
+						availableModels.devices[1].name =
+							newLang === "zh" ? "笔记本电脑" : "Laptop";
+						availableModels.devices[2].name =
+							newLang === "zh" ? "手机" : "Phone";
+						availableModels.accessories[0].name =
+							newLang === "zh" ? "键盘" : "Keyboard";
+						availableModels.accessories[1].name =
+							newLang === "zh" ? "鼠标" : "Mouse";
+						availableModels.accessories[2].name =
+							newLang === "zh" ? "通用支架" : "Universal Stand";
+						availableModels.others[0].name =
+							newLang === "zh" ? "自定义立方体" : "Custom Box";
+					});
+
+					const saveState = (shouldAutoSave = true) => {
+						const currentState = {
+							objects: deepClone(objects),
+							sceneName: sceneName.value,
+						};
+						if (historyIndex.value < history.value.length - 1) {
+							history.value = history.value.slice(0, historyIndex.value + 1);
+						}
+						history.value.push(currentState);
+						historyIndex.value++;
+						if (shouldAutoSave) autoSave();
+					};
+
+					const loadState = (state) => {
+						sceneName.value = state.sceneName;
+						objects.splice(0, objects.length, ...deepClone(state.objects));
+						rebuildSceneFromData();
+					};
+
+					const undo = () => {
+						if (canUndo.value) {
+							historyIndex.value--;
+							loadState(history.value[historyIndex.value]);
+						}
+					};
+					const redo = () => {
+						if (canRedo.value) {
+							historyIndex.value++;
+							loadState(history.value[historyIndex.value]);
+						}
+					};
+
+					const updateObjectValue = (id, key, axis, value) => {
+						const obj = objects.find((o) => o.id === id);
+						if (obj) {
+							obj[key][axis] = Number(value);
+						}
+					};
+					const updateObjectParam = (id, key, value) => {
+						const obj = objects.find((o) => o.id === id);
+						if (obj) {
+							obj.params[key] = value;
+						}
+					};
+
+					const toggleObjectExpansion = (id) => {
+						expandedObjectId.value = expandedObjectId.value === id ? null : id;
+					};
+					const toggleObjectSelection = (id) => {
+						selectedObjectId.value = selectedObjectId.value === id ? null : id;
+						if (selectedObjectId.value) expandedObjectId.value = id;
+					};
+					const toggleMountDropdown = (standId) => {
+						showMountDropdownFor.value =
+							showMountDropdownFor.value === standId ? null : standId;
+					};
+
+					const mountObject = (standId, itemId) => {
+						const stand = objects.find((o) => o.id === standId);
+						const item = objects.find((o) => o.id === itemId);
+						if (stand && item && !stand.params.mountedObjectId) {
+							stand.params.mountedObjectId = itemId;
+							item.mountedToId = standId;
+							showMountDropdownFor.value = null;
+							saveState();
+						}
+					};
+
+					const unmountObject = (standId) => {
+						const stand = objects.find((o) => o.id === standId);
+						if (stand && stand.params.mountedObjectId) {
+							const item = objects.find(
+								(o) => o.id === stand.params.mountedObjectId
+							);
+							if (item) {
+								item.mountedToId = null;
+								const desk = objects.find((o) => o.type.startsWith("desk-"));
+								item.position.x = stand.position.x;
+								item.position.y = desk ? desk.params.height : 0;
+								item.position.z = stand.position.z;
+							}
+							stand.params.mountedObjectId = null;
+							saveState();
+						}
+					};
+
+					const addObject = (type) => {
+						if (type.startsWith("desk-") && isDeskInScene.value) return;
+						const desk = objects.find((o) => o.type.startsWith("desk-"));
+						const yPos = desk ? desk.params.height + (desk.position.y || 0) : 0;
+						let data = {
+							id: THREE.MathUtils.generateUUID(),
+							type,
+							position: { x: 0, y: yPos, z: 0 },
+							rotation: { x: 0, y: 0, z: 0 },
+							mountedToId: null,
+							params: {},
+						};
+						switch (type) {
+							case "desk-rect":
+								data.position.y = 0;
+								data.params = {
+									width: 1.2,
+									depth: 0.6,
+									height: 0.75,
+									color: "#8B4513",
+									showLegs: true,
+								};
+								break;
+							case "desk-l":
+								data.position.y = 0;
+								data.params = {
+									widthA: 1.5,
+									depthA: 0.7,
+									widthB: 1.5,
+									depthB: 0.7,
+									height: 0.75,
+									color: "#8B4513",
+									showLegs: true,
+								};
+								break;
+							case "monitor":
+								data.params = {
+									width: 0.55,
+									height: 0.32,
+									color: "#222222",
+									isMountable: true,
+								};
+								break;
+							case "macbook":
+								data.params = {
+									width: 0.3,
+									height: 0.015,
+									depth: 0.21,
+									color: "#CCCCCC",
+									isMountable: true,
+								};
+								break;
+							case "keyboard":
+								data.params = {
+									width: 0.44,
+									height: 0.02,
+									depth: 0.14,
+									color: "#333333",
+								};
+								break;
+							case "mouse":
+								data.params = {
+									width: 0.06,
+									height: 0.03,
+									depth: 0.1,
+									color: "#333333",
+								};
+								break;
+							case "iphone":
+								data.params = {
+									width: 0.07,
+									height: 0.008,
+									depth: 0.14,
+									color: "#E0E0E0",
+									isMountable: true,
+								};
+								break;
+							case "universal-stand":
+								data.params = {
+									baseSize: 0.25,
+									poleHeight: 0.4,
+									armLength: 0.3,
+									color: "#555555",
+									mountedObjectId: null,
+								};
+								break;
+							case "custom-box":
+								data.params = {
+									width: 0.2,
+									height: 0.4,
+									depth: 0.5,
+									color: "#BEBEBE",
+								};
+								break;
+						}
+						objects.push(data);
+						selectedObjectId.value = data.id;
+						expandedObjectId.value = data.id;
+						saveState();
+					};
+
+					const deleteObject = (id) => {
+						const obj = objects.find((o) => o.id === id);
+						if (!obj) return;
+						saveState();
+						if (obj.type === "universal-stand" && obj.params.mountedObjectId)
+							unmountObject(id);
+						if (obj.mountedToId) unmountObject(obj.mountedToId);
+						if (obj.type.startsWith("desk-")) objects.splice(0, objects.length);
+						else {
+							const i = objects.findIndex((o) => o.id === id);
+							if (i > -1) objects.splice(i, 1);
+						}
+					};
+
+					const dropObject = (id) => {
+						const dataObj = objects.find((o) => o.id === id);
+						const obj3D = sceneObjects.get(id);
+						if (!dataObj || !obj3D || dataObj.mountedToId) return;
+
+						const collidableObjects = Array.from(sceneObjects.values()).filter(
+							(o) => o.userData.id !== id
+						);
+						if (collidableObjects.length === 0) return;
+
+						const raycaster = new THREE.Raycaster();
+						const objPosition = new THREE.Vector3();
+						obj3D.getWorldPosition(objPosition);
+						raycaster.set(objPosition, new THREE.Vector3(0, -1, 0));
+
+						const intersects = raycaster.intersectObjects(
+							collidableObjects,
+							true
+						);
+
+						if (intersects.length > 0) {
+							const firstHitPoint = intersects[0].point;
+							const parent = obj3D.parent;
+							const parentInverse = new THREE.Matrix4();
+							if (parent) {
+								parent.updateWorldMatrix(true, false);
+								parentInverse.copy(parent.matrixWorld).invert();
+								firstHitPoint.applyMatrix4(parentInverse);
+							}
+							dataObj.position.y = firstHitPoint.y;
+							saveState();
+						}
+					};
+
+					const initThree = () => {
+						const container = document.getElementById("scene-container");
+						scene = new THREE.Scene();
+						scene.background = new THREE.Color(0xf0f0f0);
+						scene.fog = new THREE.Fog(0xf0f0f0, 10, 50);
+
+						camera = new THREE.PerspectiveCamera(
+							70,
+							container.clientWidth / container.clientHeight,
+							0.01,
+							100
+						);
+						camera.position.set(2, 2, 3);
+
+						renderer = new THREE.WebGLRenderer({
+							antialias: true,
+							alpha: true,
+						});
+						renderer.setSize(container.clientWidth, container.clientHeight);
+						renderer.setPixelRatio(window.devicePixelRatio);
+						renderer.shadowMap.enabled = true;
+						container.innerHTML = "";
+						container.appendChild(renderer.domElement);
+
+						scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+						const dLight = new THREE.DirectionalLight(0xffffff, 0.8);
+						dLight.position.set(5, 10, 7.5);
+						dLight.castShadow = true;
+						scene.add(dLight);
+
+						const ground = new THREE.Mesh(
+							new THREE.PlaneGeometry(100, 100),
+							new THREE.MeshStandardMaterial({ color: 0xcccccc })
+						);
+						ground.rotation.x = -Math.PI / 2;
+						ground.receiveShadow = true;
+						scene.add(ground);
+						scene.add(new THREE.GridHelper(100, 100, 0x888888, 0x888888));
+
+						orbitControls = new OrbitControls(camera, renderer.domElement);
+						transformControls = new TransformControls(
+							camera,
+							renderer.domElement
+						);
+						transformControls.addEventListener("dragging-changed", (event) => {
+							isTransformDragging.value = event.value;
+							orbitControls.enabled = !event.value;
+							if (!event.value) saveState(); // Save state on drag end
+						});
+						transformControls.addEventListener("objectChange", () => {
+							const obj = transformControls.object;
+							if (!obj?.userData.id) return;
+							const dataObj = objects.find((o) => o.id === obj.userData.id);
+							if (!dataObj) return;
+							dataObj.position.x = obj.position.x;
+							dataObj.position.y = obj.position.y;
+							dataObj.position.z = obj.position.z;
+							dataObj.rotation.x = THREE.MathUtils.radToDeg(obj.rotation.x);
+							dataObj.rotation.y = THREE.MathUtils.radToDeg(obj.rotation.y);
+							dataObj.rotation.z = THREE.MathUtils.radToDeg(obj.rotation.z);
+						});
+						scene.add(transformControls);
+
+						selectionBox = new THREE.BoxHelper();
+						selectionBox.material.color.set(0x007bff);
+						selectionBox.material.depthTest = false;
+						selectionBox.renderOrder = 1;
+						selectionBox.material.linewidth = 2;
+						selectionBox.visible = false;
+						scene.add(selectionBox);
+
+						renderer.domElement.addEventListener("mousedown", (e) => {
+							mouseDownInfo = { x: e.clientX, y: e.clientY, time: Date.now() };
+						});
+						renderer.domElement.addEventListener("mouseup", (e) => {
+							const dx = e.clientX - mouseDownInfo.x;
+							const dy = e.clientY - mouseDownInfo.y;
+							const dist = Math.sqrt(dx * dx + dy * dy);
+							if (Date.now() - mouseDownInfo.time < 300 && dist < 5)
+								handleSceneClick(e);
+						});
+
+						renderer.setAnimationLoop(() => {
+							if (
+								selectionBox.visible &&
+								sceneObjects.has(selectedObjectId.value)
+							) {
+								selectionBox.setFromObject(
+									sceneObjects.get(selectedObjectId.value)
+								);
+							}
+							renderer.render(scene, camera);
+						});
+					};
+
+					const handleSceneClick = (event) => {
+						if (isTransformDragging.value || isPreviewing.value) return; // Disable clicks in preview mode
+						const rect = renderer.domElement.getBoundingClientRect();
+						const mouse = new THREE.Vector2(
+							((event.clientX - rect.left) / rect.width) * 2 - 1,
+							-((event.clientY - rect.top) / rect.height) * 2 + 1
+						);
+						const raycaster = new THREE.Raycaster();
+						raycaster.setFromCamera(mouse, camera);
+						const intersects = raycaster.intersectObjects(
+							Array.from(sceneObjects.values()),
+							true
+						);
+
+						let targetGroup = null;
+						if (intersects.length > 0) {
+							let obj = intersects[0].object;
+							while (obj && !obj.userData.id) obj = obj.parent;
+							if (obj) targetGroup = obj;
+						}
+
+						if (targetGroup) {
+							const targetId = targetGroup.userData.id;
+							if (selectedObjectId.value === targetId) {
+								transformMode.value =
+									transformMode.value === "translate" ? "rotate" : "translate";
+							} else {
+								selectedObjectId.value = targetId;
+								transformMode.value = "translate";
+							}
+						} else {
+							selectedObjectId.value = null;
+						}
+					};
+
+					watch(isPreviewing, () => {
+						nextTick(() => {
+							handleResize();
+						});
+					});
+
+					const togglePreview = (state) => {
+						isPreviewing.value = state;
+						if (state) {
+							// Entering preview mode
+							selectedObjectId.value = null; // Deselect object to hide transform controls
+							// Optional: Frame the camera on the whole setup
+							const deskObj = Array.from(sceneObjects.values()).find(
+								(o) => o.userData.isDesk
+							);
+							if (deskObj) {
+								const box = new THREE.Box3().setFromObject(deskObj);
+								const center = box.getCenter(new THREE.Vector3());
+								const size = box.getSize(new THREE.Vector3());
+								const maxDim = Math.max(size.x, size.y, size.z);
+								const fov = camera.fov * (Math.PI / 180);
+								let cameraZ = Math.abs((maxDim / 2) * Math.tan(fov * 2));
+								cameraZ *= 1.5; // zoom out a bit
+
+								orbitControls.target.copy(center);
+								camera.position.x = center.x;
+								camera.position.y = center.y + size.y;
+								camera.position.z = center.z + cameraZ;
+								camera.lookAt(center);
+							}
+						}
+					};
+
+					const rebuildSceneFromData = () => {
+						if (!scene) return;
+						sceneObjects.forEach((obj) => {
+							if (transformControls.object === obj) transformControls.detach();
+							obj.parent?.remove(obj);
+							obj.traverse((c) => {
+								if (c.isMesh) {
+									c.geometry.dispose();
+									c.material.dispose();
+								}
+							});
+						});
+						sceneObjects.clear();
+
+						objects.forEach((data) => {
+							const obj3D = createObject3D(data);
+							if (obj3D) sceneObjects.set(data.id, obj3D);
+						});
+						const desk3D = sceneObjects.get(
+							objects.find((o) => o.type.startsWith("desk-"))?.id
+						);
+						if (desk3D) {
+							scene.add(desk3D);
+							desk3D.userData.isDesk = true;
+						}
+
+						objects.forEach((data) => {
+							const obj3D = sceneObjects.get(data.id);
+							if (!obj3D) return;
+							if (data.mountedToId) {
+								const stand3D = sceneObjects.get(data.mountedToId);
+								if (stand3D) {
+									const standData = objects.find(
+										(o) => o.id === data.mountedToId
+									);
+									const { poleHeight, armLength } = standData.params;
+									obj3D.position.set(armLength, poleHeight + 0.02, 0);
+									obj3D.rotation.set(0, 0, 0);
+									stand3D.add(obj3D);
+								}
+							} else if (!data.type.startsWith("desk-")) {
+								if (desk3D) desk3D.add(obj3D);
+								else scene.add(obj3D);
+							}
+						});
+					};
+
+					const createObject3D = (data) => {
+						const group = new THREE.Group();
+						group.userData.id = data.id;
+						const mat = new THREE.MeshStandardMaterial({
+							color: data.params.color || 0xffffff,
+							roughness: 0.7,
+						});
+						switch (data.type) {
+							case "desk-rect": {
+								const { width, depth, height, showLegs } = data.params;
+								const top = new THREE.Mesh(
+									new THREE.BoxGeometry(width, 0.04, depth),
+									mat
+								);
+								top.position.y = height - 0.02;
+								group.add(top);
+								if (showLegs) {
+									const legGeom = new THREE.CylinderGeometry(
+										0.03,
+										0.03,
+										height - 0.04,
+										16
+									);
+									[
+										[width / 2 - 0.05, depth / 2 - 0.05],
+										[-width / 2 + 0.05, depth / 2 - 0.05],
+										[width / 2 - 0.05, -depth / 2 + 0.05],
+										[-width / 2 + 0.05, -depth / 2 + 0.05],
+									].forEach((p) => {
+										const leg = new THREE.Mesh(legGeom, mat);
+										leg.position.set(p[0], (height - 0.04) / 2, p[1]);
+										group.add(leg);
+									});
+								}
+								break;
+							}
+							case "desk-l": {
+								// Simplified L-desk geometry
+								const { widthA, depthA, widthB, depthB, height, showLegs } =
+									data.params;
+								const shape = new THREE.Shape();
+								shape.moveTo(-widthA / 2, -depthA / 2);
+								shape.lineTo(widthA / 2, -depthA / 2);
+								shape.lineTo(widthA / 2, depthA / 2 - depthB);
+								shape.lineTo(widthA / 2 - widthB, depthA / 2 - depthB);
+								shape.lineTo(widthA / 2 - widthB, depthA / 2);
+								shape.lineTo(-widthA / 2, depthA / 2);
+								shape.closePath();
+								const extrudeSettings = { depth: 0.04, bevelEnabled: false };
+								const geometry = new THREE.ExtrudeGeometry(
+									shape,
+									extrudeSettings
+								);
+								const top = new THREE.Mesh(geometry, mat);
+								top.rotation.x = -Math.PI / 2;
+								top.position.y = height;
+								group.add(top);
+								if (showLegs) {
+									/* simplified legs */
+								}
+								break;
+							}
+							case "monitor": {
+								const { width, height } = data.params;
+								const screen = new THREE.Mesh(
+									new THREE.BoxGeometry(width, height, 0.01),
+									mat
+								);
+								screen.position.y = height / 2 + 0.1;
+								const standBase = new THREE.Mesh(
+									new THREE.BoxGeometry(0.2, 0.01, 0.2),
+									mat
+								);
+								const standPole = new THREE.Mesh(
+									new THREE.CylinderGeometry(0.02, 0.02, 0.1),
+									mat
+								);
+								standPole.position.y = 0.05;
+								group.add(screen, standBase, standPole);
+								break;
+							}
+							case "macbook": {
+								const { width, height, depth } = data.params;
+								const body = new THREE.Group();
+								const base = new THREE.Mesh(
+									new THREE.BoxGeometry(width, height, depth),
+									mat
+								);
+								const screen = new THREE.Mesh(
+									new THREE.BoxGeometry(width, height, depth),
+									mat
+								);
+								screen.rotation.x = Math.PI / 1.5;
+								screen.position.z = -depth / 2;
+								screen.position.y = height / 2;
+								body.add(base, screen);
+								body.position.y = height / 2;
+								group.add(body);
+								break;
+							}
+							case "universal-stand": {
+								const { baseSize, poleHeight, armLength } = data.params;
+								const base = new THREE.Mesh(
+									new THREE.CylinderGeometry(
+										baseSize / 2,
+										baseSize / 2,
+										0.02,
+										32
+									),
+									mat
+								);
+								base.position.y = 0.01;
+								const pole = new THREE.Mesh(
+									new THREE.CylinderGeometry(0.02, 0.02, poleHeight, 16),
+									mat
+								);
+								pole.position.y = poleHeight / 2 + 0.02;
+								const arm = new THREE.Mesh(
+									new THREE.CylinderGeometry(0.015, 0.015, armLength, 16),
+									mat
+								);
+								arm.rotation.z = Math.PI / 2;
+								arm.position.x = armLength / 2;
+								arm.position.y = poleHeight + 0.02;
+								group.add(base, pole, arm);
+								break;
+							}
+							case "custom-box":
+							case "keyboard":
+							case "mouse":
+							case "iphone": {
+								const { width, height, depth } = data.params;
+								const mesh = new THREE.Mesh(
+									new THREE.BoxGeometry(width, height, depth),
+									mat
+								);
+								mesh.position.y = height / 2;
+								group.add(mesh);
+								break;
+							}
+						}
+						if (group.children.length > 0) {
+							if (!data.mountedToId) {
+								group.position.set(
+									data.position.x,
+									data.position.y,
+									data.position.z
+								);
+								group.rotation.set(
+									THREE.MathUtils.degToRad(data.rotation.x),
+									THREE.MathUtils.degToRad(data.rotation.y),
+									THREE.MathUtils.degToRad(data.rotation.z)
+								);
+							}
+							group.traverse((c) => {
+								c.castShadow = true;
+								c.receiveShadow = true;
+							});
+							return group;
+						}
+						return null;
+					};
+
+					watch(
+						objects,
+						() => {
+							if (isTransformDragging.value) return;
+							rebuildSceneFromData();
+							if (
+								selectedObjectId.value &&
+								sceneObjects.has(selectedObjectId.value)
+							) {
+								const obj3D = sceneObjects.get(selectedObjectId.value);
+								if (obj3D) {
+									transformControls.attach(obj3D);
+									selectionBox.setFromObject(obj3D);
+									selectionBox.visible = true;
+								}
+							}
+						},
+						{ deep: true }
+					);
+
+					watch(selectedObjectId, (newId) => {
+						if (newId) {
+							const obj3D = sceneObjects.get(newId);
+							if (obj3D) {
+								transformControls.attach(obj3D);
+								selectionBox.setFromObject(obj3D);
+								selectionBox.visible = true;
+
+								expandedObjectId.value = newId;
+								nextTick(() => {
+									const element = document.getElementById("item-" + newId);
+									element?.scrollIntoView({
+										behavior: "smooth",
+										block: "nearest",
+									});
+								});
+							}
+						} else {
+							if (transformControls) transformControls.detach();
+							if (selectionBox) selectionBox.visible = false;
+							expandedObjectId.value = null;
+						}
+					});
+
+					watch(transformMode, (mode) => {
+						if (transformControls) transformControls.setMode(mode);
+					});
+
+					return {
+						layoutLoaded,
+						sceneName,
+						objects,
+						selectedObjectId,
+						expandedObjectId,
+						isAddModelModalOpen,
+						isHelpModalOpen,
+						availableModels,
+						isMobile,
+						isPreviewing,
+						transformMode,
+						addModalCategory,
+						isDeskInScene,
+						mountableItems,
+						lang,
+						t,
+						canUndo,
+						canRedo,
+						showMountDropdownFor,
+						getMountedItem,
+						createNewLayout,
+						loadLayoutFromFile,
+						saveLayoutToFile,
+						exitToWelcome,
+						confirmExit,
+						addObject,
+						deleteObject,
+						toggleObjectExpansion,
+						toggleObjectSelection,
+						getModelDisplayName,
+						togglePreview,
+						mountObject,
+						unmountObject,
+						toggleMountDropdown,
+						toggleLang,
+						dropObject,
+						saveState,
+						undo,
+						redo,
+						updateObjectValue,
+						updateObjectParam,
+						isPanelOpen,
+					};
+				},
+			};
+			createApp(App).mount("#app");
+		</script>
+	</body>
+</html>
