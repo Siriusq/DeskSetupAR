@@ -60,10 +60,42 @@
 			.welcome-screen {
 				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 			}
+			#loading-overlay {
+				position: absolute;
+				inset: 0;
+				background-color: rgba(0, 0, 0, 0.7);
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				color: white;
+				z-index: 100;
+			}
+			.spinner {
+				border: 4px solid rgba(255, 255, 255, 0.3);
+				border-radius: 50%;
+				border-top: 4px solid #fff;
+				width: 40px;
+				height: 40px;
+				animation: spin 1s linear infinite;
+			}
+			@keyframes spin {
+				0% {
+					transform: rotate(0deg);
+				}
+				100% {
+					transform: rotate(360deg);
+				}
+			}
 		</style>
 	</head>
 	<body class="bg-gray-100 text-gray-800 antialiased overflow-hidden">
 		<div id="app" class="h-screen w-screen">
+			<!-- Loading Overlay -->
+			<div v-if="isLoading" id="loading-overlay">
+				<div class="spinner"></div>
+				<p class="mt-4 text-lg">{{ t.loadingAR }}</p>
+			</div>
 			<!-- Initial Load Modal -->
 			<div
 				v-if="!layoutLoaded"
@@ -138,11 +170,11 @@
 					class="relative"
 					:class="isPreviewing ? 'w-screen h-screen' : 'flex-grow order-1 md:order-2'"
 				>
-					<div id="scene-container" class="w-full h-full bg-gray-200"></div>
+					<div id="scene-container" class="w-screen h-screen bg-gray-200"></div>
 					<!-- UI Overlays for Scene -->
 					<div
 						v-if="!isPreviewing"
-						class="absolute top-4 right-4 flex space-x-2"
+						class="absolute top-4 left-4 flex space-x-2"
 					>
 						<button
 							@click="isHelpModalOpen = true"
@@ -168,7 +200,7 @@
 
 				<!-- Control Panel / Mobile Drawer -->
 				<div
-					v-if="!isPreviewing"
+					v-show="!isPreviewing"
 					:class="[
 						'bg-white flex flex-col',
 						isMobile
@@ -226,87 +258,97 @@
 					</div>
 
 					<!-- Actions -->
-					<div class="p-4 flex items-center space-x-2 border-b border-gray-200">
-						<button
-							@click="isAddModelModalOpen = true"
-							class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
-						>
-							{{ t.addModel }}
-						</button>
-						<button
-							@click="togglePreview(true)"
-							class="flex-1 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
-						>
-							{{ t.preview }}
-						</button>
-						<button
-							@click="saveLayoutToFile"
-							class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
-						>
-							{{ t.saveLayout }}
-						</button>
-						<button
-							@click="confirmExit"
-							class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
-						>
-							{{ t.exit }}
-						</button>
-
-						<button
-							@click="undo"
-							:disabled="!canUndo"
-							class="disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center bg-gray-200 hover:bg-gray-300 rounded-md p-2"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								class="h-5 w-5"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
+					<div class="p-4 border-b border-gray-200">
+						<div class="flex space-x-2">
+							<button
+								@click="isAddModelModalOpen = true"
+								class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
 							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"
-								/>
-							</svg>
-						</button>
-						<button
-							@click="redo"
-							:disabled="!canRedo"
-							class="disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center bg-gray-200 hover:bg-gray-300 rounded-md p-2"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								class="h-5 w-5"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
+								{{ t.addModel }}
+							</button>
+							<button
+								@click="isArModalOpen = true"
+								class="flex-1 bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
 							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"
-								/>
-							</svg>
-						</button>
-
-						<button
-							v-if="isMobile"
-							@click="isHelpModalOpen = true"
-							class="p-2 bg-gray-200 rounded-md hover:bg-gray-300"
-						>
-							?
-						</button>
-						<button
-							v-if="isMobile"
-							@click="toggleLang"
-							class="p-2 bg-gray-200 rounded-md hover:bg-gray-300 text-xs font-bold"
-						>
-							{{ lang === 'zh' ? 'EN' : '中' }}
-						</button>
+								{{ t.arPreview }}
+							</button>
+							<div
+								class="relative more-menu-container"
+								:class="isMobile ? '' : 'flex-1'"
+							>
+								<button
+									@click="isMoreMenuOpen = !isMoreMenuOpen"
+									class="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md transition duration-300 text-sm"
+								>
+									{{ t.more }}
+									<span class="text-xs">▼</span>
+								</button>
+								<div
+									v-if="isMoreMenuOpen"
+									@click="isMoreMenuOpen = false"
+									class="absolute right-0 top-full mb-2 w-48 bg-white rounded-md shadow-lg z-50 border"
+								>
+									<a
+										@click="togglePreview(true)"
+										class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+										>{{ t.preview }}</a
+									>
+									<a
+										@click="saveLayoutToFile"
+										class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+										>{{ t.saveLayout }}</a
+									>
+									<a
+										@click="confirmExit"
+										class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer"
+										>{{ t.exit }}</a
+									>
+								</div>
+							</div>
+						</div>
+						<div class="flex items-center space-x-2 mt-3">
+							<p class="text-xs text-gray-500 flex-grow">{{ t.history }}</p>
+							<button
+								@click="undo"
+								:disabled="!canUndo"
+								class="disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center bg-gray-200 hover:bg-gray-300 rounded-md p-2"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-5 w-5"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"
+									/>
+								</svg>
+							</button>
+							<button
+								@click="redo"
+								:disabled="!canRedo"
+								class="disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center bg-gray-200 hover:bg-gray-300 rounded-md p-2"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-5 w-5"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"
+									/>
+								</svg>
+							</button>
+						</div>
 					</div>
 
 					<!-- Object List -->
@@ -879,6 +921,41 @@
 					</div>
 				</div>
 			</div>
+
+			<!-- AR Preview Modal -->
+			<div
+				v-if="isArModalOpen"
+				class="absolute inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4"
+				@click="isArModalOpen = false"
+			>
+				<div
+					class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center"
+					@click.stop
+				>
+					<h3 class="text-xl font-bold mb-4">{{ t.arModalTitle }}</h3>
+					<p class="text-gray-600 mb-8">{{ t.arModalDesc }}</p>
+					<div class="space-y-4">
+						<button
+							@click="exportForAR(true)"
+							class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300"
+						>
+							{{ t.arIncludeDesk }}
+						</button>
+						<button
+							@click="exportForAR(false)"
+							class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg transition duration-300"
+						>
+							{{ t.arExcludeDesk }}
+						</button>
+					</div>
+					<button
+						@click="isArModalOpen = false"
+						class="mt-6 text-gray-500 hover:text-gray-700 text-sm"
+					>
+						{{ t.cancel }}
+					</button>
+				</div>
+			</div>
 		</div>
 
 		<!-- Dependencies: Vue and Three.js -->
@@ -911,6 +988,8 @@
 			import * as THREE from "three";
 			import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 			import { TransformControls } from "three/addons/controls/TransformControls.js";
+			import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+			import { USDZExporter } from "three/addons/exporters/USDZExporter.js";
 
 			// Helper function for deep cloning plain objects
 			const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
@@ -925,6 +1004,8 @@
 					const expandedObjectId = ref(null);
 					const isAddModelModalOpen = ref(false);
 					const isHelpModalOpen = ref(false);
+					const isArModalOpen = ref(false);
+					const isLoading = ref(false);
 					const addModalCategory = ref(null);
 					const isMobile = ref(window.innerWidth < 768);
 					const isPreviewing = ref(false);
@@ -932,7 +1013,8 @@
 					const transformMode = ref("translate");
 					const showMountDropdownFor = ref(null);
 					const lang = ref("zh");
-					const isPanelOpen = ref(true); // State for mobile drawer
+					const isPanelOpen = ref(true);
+					const isMoreMenuOpen = ref(false);
 
 					// --- UNDO/REDO ---
 					const history = ref([]);
@@ -978,8 +1060,9 @@
 							welcomeOpen: "打开布局文件 (.json)",
 							sceneNamePlaceholder: "我的桌面布局",
 							addModel: "添加模型",
-							saveLayout: "保存",
-							preview: "预览",
+							saveLayout: "保存方案",
+							preview: "3D预览",
+							arPreview: "AR 预览",
 							exitPreview: "返回编辑",
 							exit: "退出",
 							exitConfirm: "您确定要退出吗？所有未保存的更改将丢失。",
@@ -1034,6 +1117,16 @@
 							helpSelectDesc1: "单击场景中的物品以选中。",
 							helpSelectDesc2: "再次单击选中的物品可在移动/旋转模式间切换。",
 							helpSelectDesc3: "单击场景空白处取消选中。",
+							arModalTitle: "AR 预览选项",
+							arModalDesc:
+								"请选择是否在 AR 场景中包含桌子。若不包含，则只会显示桌面上的物品。",
+							arIncludeDesk: "包含桌子",
+							arExcludeDesk: "仅显示物品",
+							cancel: "取消",
+							loadingAR: "正在准备AR场景...",
+							noDeskError: "场景中没有桌子可供导出。",
+							more: "更多",
+							history: "操作历史",
 						},
 						en: {
 							welcomeTitle: "Welcome to Desk Planner",
@@ -1043,8 +1136,9 @@
 							welcomeOpen: "Open Layout File (.json)",
 							sceneNamePlaceholder: "My Desk Setup",
 							addModel: "Add Model",
-							saveLayout: "Save",
-							preview: "Preview",
+							saveLayout: "Save Layout",
+							preview: "3D Preview",
+							arPreview: "AR Preview",
 							exitPreview: "Back to Editor",
 							exit: "Exit",
 							exitConfirm:
@@ -1103,6 +1197,16 @@
 							helpSelectDesc2:
 								"Click the selected object again to toggle between Translate and Rotate modes.",
 							helpSelectDesc3: "Click on the ground to deselect.",
+							arModalTitle: "AR Preview Options",
+							arModalDesc:
+								"Choose whether to include the desk in the AR scene. If not, only the items on the desk will be shown.",
+							arIncludeDesk: "Include Desk",
+							arExcludeDesk: "Items Only",
+							cancel: "Cancel",
+							loadingAR: "Preparing AR Scene...",
+							noDeskError: "There is no desk in the scene to export.",
+							more: "More",
+							history: "History",
 						},
 					};
 					const t = computed(() => translations[lang.value]);
@@ -1138,6 +1242,14 @@
 							loadLayoutData(JSON.parse(savedLayout));
 						}
 						window.addEventListener("resize", handleResize);
+						document.addEventListener("click", (e) => {
+							if (
+								isMoreMenuOpen.value &&
+								!e.target.closest(".more-menu-container")
+							) {
+								isMoreMenuOpen.value = false;
+							}
+						});
 						handleResize();
 					});
 					onUnmounted(() => window.removeEventListener("resize", handleResize));
@@ -1236,6 +1348,7 @@
 						historyIndex.value = -1;
 						isAddModelModalOpen.value = false;
 						isHelpModalOpen.value = false;
+						isArModalOpen.value = false;
 						addModalCategory.value = null;
 						isPreviewing.value = false;
 
@@ -1653,28 +1766,143 @@
 					const togglePreview = (state) => {
 						isPreviewing.value = state;
 						if (state) {
-							// Entering preview mode
-							selectedObjectId.value = null; // Deselect object to hide transform controls
-							// Optional: Frame the camera on the whole setup
-							const deskObj = Array.from(sceneObjects.values()).find(
-								(o) => o.userData.isDesk
-							);
-							if (deskObj) {
-								const box = new THREE.Box3().setFromObject(deskObj);
+							selectedObjectId.value = null;
+							const allObjectsGroup = new THREE.Group();
+							sceneObjects.forEach((obj) => allObjectsGroup.add(obj.clone()));
+							if (allObjectsGroup.children.length > 0) {
+								const box = new THREE.Box3().setFromObject(allObjectsGroup);
 								const center = box.getCenter(new THREE.Vector3());
 								const size = box.getSize(new THREE.Vector3());
 								const maxDim = Math.max(size.x, size.y, size.z);
 								const fov = camera.fov * (Math.PI / 180);
-								let cameraZ = Math.abs((maxDim / 2) * Math.tan(fov * 2));
-								cameraZ *= 1.5; // zoom out a bit
+								let cameraZ = Math.abs(maxDim / (2 * Math.tan(fov / 2)));
+								cameraZ *= 1.5;
 
 								orbitControls.target.copy(center);
-								camera.position.x = center.x;
-								camera.position.y = center.y + size.y;
-								camera.position.z = center.z + cameraZ;
+								camera.position.copy(center);
+								camera.position.z += cameraZ;
 								camera.lookAt(center);
 							}
 						}
+					};
+
+					// Key function
+					const exportForAR = async (includeDesk) => {
+						isLoading.value = true;
+						isArModalOpen.value = false;
+
+						const deskData = objects.find((o) => o.type.startsWith("desk-"));
+						if (!deskData && includeDesk) {
+							alert(t.value.noDeskError);
+							isLoading.value = false;
+							return;
+						}
+
+						// This whole group will be exported.
+						const objectToExport = new THREE.Group();
+
+						// Clone and add the desk if requested.
+						if (includeDesk && deskData) {
+							const desk3D = sceneObjects.get(deskData.id);
+							if (desk3D) {
+								objectToExport.add(desk3D.clone(true));
+							}
+						} else {
+							// If no desk is included, we add all non-desk items.
+							// Their positions must be adjusted relative to the floor (y=0).
+							objects.forEach((data) => {
+								if (!data.type.startsWith("desk-")) {
+									const item3D = sceneObjects.get(data.id);
+									if (item3D) {
+										const clone = item3D.clone(true);
+
+										// Get world transforms, as items might be nested.
+										const worldPosition = item3D.getWorldPosition(
+											new THREE.Vector3()
+										);
+										const worldQuaternion = item3D.getWorldQuaternion(
+											new THREE.Quaternion()
+										);
+										const worldScale = item3D.getWorldScale(
+											new THREE.Vector3()
+										);
+
+										// Adjust position relative to the desk height.
+										const deskHeight = deskData ? deskData.params.height : 0;
+										worldPosition.y -= deskHeight;
+
+										clone.position.copy(worldPosition);
+										clone.quaternion.copy(worldQuaternion);
+										clone.scale.copy(worldScale);
+
+										objectToExport.add(clone);
+									}
+								}
+							});
+						}
+
+						// Use a short timeout to let the UI update (show loading spinner)
+						setTimeout(async () => {
+							const isIOS =
+								/iPad|iPhone|iPod/.test(navigator.userAgent) &&
+								!window.MSStream;
+							const isAndroid = /Android/.test(navigator.userAgent);
+							const a = document.createElement("a");
+							a.style.display = "none";
+							document.body.appendChild(a);
+
+							try {
+								if (isIOS) {
+									// iOS requires USDZ
+									const exporter = new USDZExporter();
+									const arrayBuffer = await exporter.parse(objectToExport);
+									const blob = new Blob([arrayBuffer], {
+										type: "model/vnd.usdz+zip",
+									});
+									a.href = URL.createObjectURL(blob);
+									a.setAttribute("rel", "ar");
+									a.appendChild(document.createElement("img")); // Required for Quick Look
+									a.download = "scene.usdz";
+								} else if (isAndroid) {
+									// Android uses GLB with a special intent URL
+									const exporter = new GLTFExporter();
+									const result = await exporter.parseAsync(objectToExport, {
+										binary: true,
+									});
+									const blob = new Blob([result], {
+										type: "model/gltf-binary",
+									});
+									const modelUrl = URL.createObjectURL(blob);
+									const intent = `intent://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(
+										modelUrl
+									)}&mode=ar_only#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(
+										window.location.href
+									)};end;`;
+									a.href = intent;
+								} else {
+									// Fallback for desktop: download GLB
+									const exporter = new GLTFExporter();
+									const result = await exporter.parseAsync(objectToExport, {
+										binary: true,
+									});
+									const blob = new Blob([result], {
+										type: "model/gltf-binary",
+									});
+									a.href = URL.createObjectURL(blob);
+									a.download = "scene.glb";
+								}
+
+								a.click();
+								if (a.href.startsWith("blob:")) {
+									URL.revokeObjectURL(a.href);
+								}
+							} catch (error) {
+								console.error("An error happened during AR export:", error);
+							} finally {
+								document.body.removeChild(a);
+								isLoading.value = false;
+							}
+						}, 100);
 					};
 
 					const rebuildSceneFromData = () => {
@@ -1761,7 +1989,6 @@
 								break;
 							}
 							case "desk-l": {
-								// Simplified L-desk geometry
 								const { widthA, depthA, widthB, depthB, height, showLegs } =
 									data.params;
 								const shape = new THREE.Shape();
@@ -1935,6 +2162,13 @@
 						if (transformControls) transformControls.setMode(mode);
 					});
 
+					// Add a new helper for async parse
+					GLTFExporter.prototype.parseAsync = function (input, options) {
+						return new Promise((resolve, reject) => {
+							this.parse(input, resolve, reject, options);
+						});
+					};
+
 					return {
 						layoutLoaded,
 						sceneName,
@@ -1943,6 +2177,8 @@
 						expandedObjectId,
 						isAddModelModalOpen,
 						isHelpModalOpen,
+						isArModalOpen,
+						isLoading,
 						availableModels,
 						isMobile,
 						isPreviewing,
@@ -1967,6 +2203,7 @@
 						toggleObjectSelection,
 						getModelDisplayName,
 						togglePreview,
+						exportForAR,
 						mountObject,
 						unmountObject,
 						toggleMountDropdown,
@@ -1978,6 +2215,7 @@
 						updateObjectValue,
 						updateObjectParam,
 						isPanelOpen,
+						isMoreMenuOpen,
 					};
 				},
 			};
