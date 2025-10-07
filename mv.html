@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh">
+	<head>
+		<meta charset="UTF-8" />
+		<title>AR 预览 Demo</title>
+		<script
+			type="module"
+			src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
+		></script>
+		<style>
+			body {
+				font-family: sans-serif;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				height: 100vh;
+				gap: 1em;
+			}
+			#preview {
+				width: 90vw;
+				height: 70vh;
+				background: #eee;
+				border-radius: 10px;
+			}
+			input[type="file"] {
+				margin-top: 1em;
+			}
+		</style>
+	</head>
+	<body>
+		<h2>上传 glb 模型并预览 (Web + AR)</h2>
+		<model-viewer
+			id="preview"
+			ar
+			ar-modes="webxr scene-viewer quick-look"
+			camera-controls
+			shadow-intensity="1"
+			exposure="1"
+			environment-image="neutral"
+			alt="3D 模型预览"
+		>
+		</model-viewer>
+
+		<input type="file" id="fileInput" accept=".glb,.gltf" />
+
+		<script>
+			const fileInput = document.getElementById("fileInput");
+			const viewer = document.getElementById("preview");
+
+			fileInput.addEventListener("change", (e) => {
+				const file = e.target.files[0];
+				if (file) {
+					const url = URL.createObjectURL(file);
+					viewer.src = url; // 直接加载本地 Blob
+				}
+			});
+		</script>
+	</body>
+</html>

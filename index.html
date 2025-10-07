@@ -51,9 +51,6 @@
 				-webkit-appearance: none;
 				margin: 0;
 			}
-			input[type="number"] {
-				-moz-appearance: textfield;
-			}
 			/* Style for disabled buttons in modal */
 			.category-button[disabled] {
 				opacity: 0.5;
@@ -1866,22 +1863,6 @@
 									a.setAttribute("rel", "ar");
 									a.appendChild(document.createElement("img")); // Required for Quick Look
 									a.download = "scene.usdz";
-								} else if (isAndroid) {
-									// Android uses GLB with a special intent URL
-									const exporter = new GLTFExporter();
-									const result = await exporter.parseAsync(objectToExport, {
-										binary: true,
-									});
-									const blob = new Blob([result], {
-										type: "model/gltf-binary",
-									});
-									const modelUrl = URL.createObjectURL(blob);
-									const intent = `intent://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(
-										modelUrl
-									)}&mode=ar_only#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(
-										window.location.href
-									)};end;`;
-									a.href = intent;
 								} else {
 									// Fallback for desktop: download GLB
 									const exporter = new GLTFExporter();
