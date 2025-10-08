@@ -1,1 +1,2 @@
 # DeskSetupAR
+I tried using Vibe Coding, but the AI-generated code was a complete mess. Debugging it took longer than rewriting it from scratch. Therefore, this project will be completely rebuilt from the ground up.

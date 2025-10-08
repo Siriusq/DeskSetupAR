@@ -2,57 +2,106 @@
 <html lang="zh">
 	<head>
 		<meta charset="UTF-8" />
-		<title>AR 预览 Demo</title>
+		<title>AR 预览</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<script
 			type="module"
 			src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
 		></script>
 		<style>
+			html,
 			body {
-				font-family: sans-serif;
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				justify-content: center;
-				height: 100vh;
-				gap: 1em;
+				margin: 0;
+				padding: 0;
+				height: 100%;
+				background: #f5f5f5;
+				overflow: hidden;
+				font-family: "Segoe UI", sans-serif;
 			}
-			#preview {
-				width: 90vw;
-				height: 70vh;
-				background: #eee;
+			model-viewer {
+				width: 100%;
+				height: 100%;
+				background-color: #fff;
+			}
+			#toolbar {
+				position: fixed;
+				top: 10px;
+				left: 10px;
+				background: rgba(255, 255, 255, 0.9);
 				border-radius: 10px;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+				padding: 8px 14px;
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				z-index: 10;
 			}
-			input[type="file"] {
-				margin-top: 1em;
+			button {
+				border: none;
+				background: #1976d2;
+				color: white;
+				border-radius: 6px;
+				padding: 6px 12px;
+				cursor: pointer;
+				font-size: 14px;
+			}
+			button:hover {
+				background: #1565c0;
+			}
+			.info {
+				margin-left: 6px;
+				font-size: 13px;
+				color: #333;
 			}
 		</style>
 	</head>
 	<body>
-		<h2>上传 glb 模型并预览 (Web + AR)</h2>
+		<div id="toolbar">
+			<button id="backBtn">← 返回</button>
+			<div class="info" id="info">加载中...</div>
+		</div>
+
 		<model-viewer
-			id="preview"
+			id="viewer"
 			ar
 			ar-modes="webxr scene-viewer quick-look"
 			camera-controls
+			auto-rotate
 			shadow-intensity="1"
-			exposure="1"
 			environment-image="neutral"
 			alt="3D 模型预览"
 		>
 		</model-viewer>
 
-		<input type="file" id="fileInput" accept=".glb,.gltf" />
-
 		<script>
-			const fileInput = document.getElementById("fileInput");
-			const viewer = document.getElementById("preview");
+			const params = new URLSearchParams(location.search);
+			const src = params.get("src");
 
-			fileInput.addEventListener("change", (e) => {
-				const file = e.target.files[0];
-				if (file) {
-					const url = URL.createObjectURL(file);
-					viewer.src = url; // 直接加载本地 Blob
+			const viewer = document.getElementById("viewer");
+			const info = document.getElementById("info");
+			const backBtn = document.getElementById("backBtn");
+
+			if (src) {
+				viewer.src = src;
+				info.textContent = `AR 预览`;
+			} else {
+				info.textContent = "⚠️ 未提供模型文件。";
+			}
+
+			// 返回按钮
+			backBtn.addEventListener("click", () => {
+				window.close(); // 尝试关闭标签页
+			});
+
+			// 页面关闭时清理 blob URL
+			window.addEventListener("beforeunload", () => {
+				try {
+					if (src && src.startsWith("blob:")) {
+						URL.revokeObjectURL(src);
+						console.log("✅ 已释放 Blob URL 资源");
+					}
+				} catch (e) {
+					console.warn("释放 Blob URL 时出错：", e);
 				}
 			});
 		</script>

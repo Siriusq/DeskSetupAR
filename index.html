@@ -1863,6 +1863,27 @@
 									a.setAttribute("rel", "ar");
 									a.appendChild(document.createElement("img")); // Required for Quick Look
 									a.download = "scene.usdz";
+								} else if (isAndroid) {
+									const exporter = new GLTFExporter();
+									exporter.parse(
+										objectToExport,
+										(result) => {
+											const glbBlob = new Blob([result], {
+												type: "model/gltf-binary",
+											});
+											const glbUrl = URL.createObjectURL(glbBlob);
+
+											// 打开 viewer.html 并传递 blob URL
+											const viewerPage = `mv.html?src=${encodeURIComponent(
+												glbUrl
+											)}`;
+											window.open(viewerPage, "_blank");
+										},
+										(error) => {
+											console.error("GLTF 导出错误:", error);
+										},
+										{ binary: true }
+									);
 								} else {
 									// Fallback for desktop: download GLB
 									const exporter = new GLTFExporter();
@@ -1876,14 +1897,16 @@
 									a.download = "scene.glb";
 								}
 
-								a.click();
-								if (a.href.startsWith("blob:")) {
-									URL.revokeObjectURL(a.href);
+								if (!isAndroid) {
+									a.click();
+									if (a.href.startsWith("blob:")) {
+										URL.revokeObjectURL(a.href);
+									}
+									document.body.removeChild(a);
 								}
 							} catch (error) {
 								console.error("An error happened during AR export:", error);
 							} finally {
-								document.body.removeChild(a);
 								isLoading.value = false;
 							}
 						}, 100);
